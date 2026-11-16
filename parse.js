@@ -620,18 +620,6 @@ function parkInline(ctx, src, target) {
   return target;
 }
 
-function runBlocks(ctx, src) {
-  const tokens = ctx.blocks;
-  scanBlocks(ctx, src, tokens, false);
-  for (let i = 0; i < ctx.pending.length; i++) {
-    const job = ctx.pending[i];
-    ctx.flags.inRaw = false;
-    scanInline(ctx, job.src, job.target);
-  }
-  ctx.pending = [];
-  return tokens;
-}
-
 // The block scanner. Tokenisers are tried in a fixed precedence
 // order; most are guarded by a first-character test that is a strict
 // superset of the pattern's possible openings, so the expensive
@@ -1120,21 +1108,10 @@ function hList(ctx, src) {
   return list;
 }
 
-// scanBlocks appends to ctx.blocks by default; list items need their
-// own target array, so this thin wrapper swaps the target in. (The
-// shared links table and inline queue stay common, as they must.)
+// List items are scanned into their own token array; the links
+// table and the inline queue stay shared with the enclosing scan.
 function scanBlocksInto(ctx, src, tokens) {
-  const saved = ctx.blocks;
-  // Block scanning writes into the array passed here via a local
-  // reference inside scanBlocks; emulate by temporarily pointing the
-  // context's block list at the item's array while keeping links.
-  ctx.blocks = tokens;
-  tokens.links = saved.links;
-  try {
-    scanBlocks(ctx, src, tokens, false);
-  } finally {
-    ctx.blocks = saved;
-  }
+  scanBlocks(ctx, src, tokens, false);
 }
 
 function hHtmlBlock(ctx, src) {
@@ -1644,7 +1621,8 @@ function renderImage(tok) {
  */
 export function parse(markdown) {
   const ctx = makeContext();
-  const src = markdown.replace(/\r\n|\r/g, '\n');
+  // Line endings are normalised to '\n'; most inputs need no copy.
+  const src = markdown.includes('\r') ? markdown.replace(/\r\n|\r/g, '\n') : markdown;
   scanBlocks(ctx, src, ctx.blocks, false);
   for (let i = 0; i < ctx.pending.length; i++) {
     const job = ctx.pending[i];
